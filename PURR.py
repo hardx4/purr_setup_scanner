@@ -5,6 +5,7 @@ import time
 
 URL = "https://api.hyperliquid.xyz/info"
 COIN = "PURR"
+test = 1
 
 MAX_CANDLES_PER_REQUEST = 4999
 INTERVALO_SEGUNDOS = 60 * 60  # 1 hora entre varreduras
@@ -488,7 +489,17 @@ def run_scan():
             horario = results[tf]["current_time"]
             break
 
-    if buy_count >= 4:
+    if test == 1:
+        sinal = "🟢 SINAL DE COMPRA [TEST]"
+        print(sinal)
+        notify(
+            f"<b>PURR SETUP SCANNER</b>\n"
+            f"{sinal}\n"
+            f"Preço: {preco} | {horario}\n"
+            f"Score ponderado BUY={buy_count} | SELL={sell_count}"
+            + "".join(detalhes)
+        )
+    elif buy_count >= 4:
         sinal = "🟢 SINAL DE COMPRA"
         print(sinal)
         notify(
