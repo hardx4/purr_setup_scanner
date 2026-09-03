@@ -1,3 +1,4 @@
+import os
 import requests
 import pandas as pd
 import time
@@ -7,6 +8,9 @@ COIN = "PURR"
 
 MAX_CANDLES_PER_REQUEST = 4999
 INTERVALO_SEGUNDOS = 60 * 60  # 1 hora entre varreduras
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 TIMEFRAMES = ["1d", "4h", "1h"]
 
@@ -21,6 +25,26 @@ INTERVAL_MS = {
     "4h": 4 * 60 * 60 * 1000,
     "1d": 24 * 60 * 60 * 1000,
 }
+
+
+def notify(text):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram não configurado (faltam TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
+        return
+
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": text,
+                "parse_mode": "HTML"
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+    except Exception as e:
+        print(f"Falha ao enviar Telegram: {e}")
 
 
 def fetch_candle_page(interval, start_time, end_time):
@@ -364,6 +388,16 @@ def analyze(df):
     }
 
 
+def format_tf_block(tf, data):
+    return (
+        f"\n<b>{tf}</b>\n"
+        f"Preço: {data['current_price']}\n"
+        f"RSI={data['rsi']} | BUY={data['score_buy']} | SELL={data['score_sell']}\n"
+        f"ADX={data['adx']} | {data['adx_status']}\n"
+        f"EMA200={data['pct_ema200']}% | {data['stretch']}"
+    )
+
+
 def run_scan():
     print("\n===== PURR SETUP SCANNER =====\n")
 
@@ -391,12 +425,14 @@ def run_scan():
 
     buy_count = 0
     sell_count = 0
+    detalhes = []
 
     for tf in TIMEFRAMES:
         data = results[tf]
 
         if "erro" in data:
             print(f"{tf} | ERRO: {data['erro']}")
+            detalhes.append(f"\n{tf}: ERRO {data['erro']}")
             continue
 
         print(f"\n{tf}")
@@ -434,6 +470,8 @@ def run_scan():
             f"| {data['stretch']}"
         )
 
+        detalhes.append(format_tf_block(tf, data))
+
         if data["score_buy"] >= 8:
             buy_count += TF_WEIGHT[tf]
 
@@ -442,10 +480,34 @@ def run_scan():
 
     print("\n=================================")
 
+    preco = None
+    horario = None
+    for tf in TIMEFRAMES:
+        if "current_price" in results.get(tf, {}):
+            preco = results[tf]["current_price"]
+            horario = results[tf]["current_time"]
+            break
+
     if buy_count >= 4:
-        print("🟢 SINAL DE COMPRA")
+        sinal = "🟢 SINAL DE COMPRA"
+        print(sinal)
+        notify(
+            f"<b>PURR SETUP SCANNER</b>\n"
+            f"{sinal}\n"
+            f"Preço: {preco} | {horario}\n"
+            f"Score ponderado BUY={buy_count} | SELL={sell_count}"
+            + "".join(detalhes)
+        )
     elif sell_count >= 4:
-        print("🔴 SINAL DE VENDA")
+        sinal = "🔴 SINAL DE VENDA"
+        print(sinal)
+        notify(
+            f"<b>PURR SETUP SCANNER</b>\n"
+            f"{sinal}\n"
+            f"Preço: {preco} | {horario}\n"
+            f"Score ponderado BUY={buy_count} | SELL={sell_count}"
+            + "".join(detalhes)
+        )
     else:
         print("🟡 AGUARDAR")
 
