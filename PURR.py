@@ -27,7 +27,6 @@ INTERVAL_MS = {
     "1d": 24 * 60 * 60 * 1000,
 }
 
-
 def notify(text):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram não configurado (faltam TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
@@ -46,7 +45,6 @@ def notify(text):
         response.raise_for_status()
     except Exception as e:
         print(f"Falha ao enviar Telegram: {e}")
-
 
 def fetch_candle_page(interval, start_time, end_time):
     payload = {
@@ -73,7 +71,6 @@ def fetch_candle_page(interval, start_time, end_time):
         raise Exception(f"Resposta inesperada: {data}")
 
     return data
-
 
 def get_candles(interval, start_time, end_time=None):
     if end_time is None:
@@ -149,7 +146,6 @@ def get_candles(interval, start_time, end_time=None):
 
     return df, current_price, current_time
 
-
 def discover_1d_start():
     end_time = int(time.time() * 1000)
     start_time = end_time - 20 * 365 * 24 * 60 * 60 * 1000
@@ -170,7 +166,6 @@ def discover_1d_start():
 
     return first_ts, df, current_price, current_time
 
-
 def rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
@@ -183,7 +178,6 @@ def rsi(series, period=14):
 
     return 100 - (100 / (1 + rs))
 
-
 def macd(series):
     ema12 = series.ewm(span=12, adjust=False).mean()
     ema26 = series.ewm(span=26, adjust=False).mean()
@@ -191,7 +185,6 @@ def macd(series):
     signal = macd_line.ewm(span=9, adjust=False).mean()
     hist = macd_line - signal
     return macd_line, signal, hist
-
 
 def atr(df, period=14):
     high = df["high"]
@@ -205,7 +198,6 @@ def atr(df, period=14):
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
 
     return tr.ewm(alpha=1 / period, adjust=False).mean()
-
 
 def adx(df, period=14):
     high = df["high"]
@@ -232,7 +224,6 @@ def adx(df, period=14):
     adx_value = dx.ewm(alpha=1 / period, adjust=False).mean()
 
     return adx_value, plus_di, minus_di
-
 
 def analyze(df):
     close = df["close"]
@@ -388,7 +379,6 @@ def analyze(df):
         "score_sell": score_sell
     }
 
-
 def format_tf_block(tf, data):
     return (
         f"\n<b>{tf}</b>\n"
@@ -397,7 +387,6 @@ def format_tf_block(tf, data):
         f"ADX={data['adx']} | {data['adx_status']}\n"
         f"EMA200={data['pct_ema200']}% | {data['stretch']}"
     )
-
 
 def run_scan():
     print("\n===== PURR SETUP SCANNER =====\n")
@@ -410,6 +399,7 @@ def run_scan():
         analysis_1d["current_price"] = price_1d
         analysis_1d["current_time"] = time_1d
         results["1d"] = analysis_1d
+        del df_1d
     except Exception as e:
         results["1d"] = {"erro": str(e)}
         history_start = int(time.time() * 1000) - 1500 * 24 * 60 * 60 * 1000
@@ -421,6 +411,7 @@ def run_scan():
             analysis["current_price"] = current_price
             analysis["current_time"] = current_time
             results[tf] = analysis
+            del df
         except Exception as e:
             results[tf] = {"erro": str(e)}
 
@@ -491,49 +482,29 @@ def run_scan():
 
     if test == 1:
         sinal = "🟢 SINAL DE COMPRA [TEST]"
-        print(sinal)
-        notify(
-            f"<b>PURR SETUP SCANNER</b>\n"
-            f"{sinal}\n"
-            f"Preço: {preco} | {horario}\n"
-            f"Score ponderado BUY={buy_count} | SELL={sell_count}"
-            + "".join(detalhes)
-        )
     elif buy_count >= 4:
         sinal = "🟢 SINAL DE COMPRA"
-        print(sinal)
-        notify(
-            f"<b>PURR SETUP SCANNER</b>\n"
-            f"{sinal}\n"
-            f"Preço: {preco} | {horario}\n"
-            f"Score ponderado BUY={buy_count} | SELL={sell_count}"
-            + "".join(detalhes)
-        )
     elif sell_count >= 4:
         sinal = "🔴 SINAL DE VENDA"
-        print(sinal)
-        notify(
-            f"<b>PURR SETUP SCANNER</b>\n"
-            f"{sinal}\n"
-            f"Preço: {preco} | {horario}\n"
-            f"Score ponderado BUY={buy_count} | SELL={sell_count}"
-            + "".join(detalhes)
-        )
     else:
-        print("🟡 AGUARDAR")
+        sinal = "🟡 AGUARDAR"
+
+    print(sinal)
+    notify(
+        f"<b>PURR SETUP SCANNER</b>\n"
+        f"{sinal}\n"
+        f"Preço: {preco} | {horario}\n"
+        f"Score ponderado BUY={buy_count} | SELL={sell_count}"
+        + "".join(detalhes)
+    )
 
     print("=================================\n")
 
+    results.clear()
+    detalhes.clear()
 
 if __name__ == "__main__":
-    while True:
-        inicio = time.time()
-        try:
-            run_scan()
-        except Exception as e:
-            print(f"ERRO na varredura: {e}")
-
-        decorrido = time.time() - inicio
-        espera = max(0, INTERVALO_SEGUNDOS - decorrido)
-        print(f"Próxima varredura em {int(espera / 60)} min\n")
-        time.sleep(espera)
+    try:
+        run_scan()
+    except Exception as e:
+        print(f"ERRO na varredura: {e}")
